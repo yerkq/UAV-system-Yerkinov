@@ -1,0 +1,87 @@
+clc;
+clear;
+close all;
+
+%% === System Parameters ===
+m = 1.5;    % Nominal Mass [kg]
+g = 9.81;   % Gravitational acceleration [m/s^2]
+b = 0.5;    % Damping coefficient [N*s/m]
+k = 0.3;    % Aerodynamic force constant
+
+%% === Transfer Function Model ===
+num = 1;
+den = [m b k];
+G = tf(num, den);
+
+%% === PID Controller (Auto-Tuned) ===
+PID_Controller = pidtune(G, 'PID');
+Closed_Loop_PID = feedback(PID_Controller * G, 1);
+
+%% === Factor 1: Wind and Turbulence (External Disturbance) ===
+t = 0:0.01:10;
+wind = 0.2 * sin(2 * pi * 0.5 * t) + 0.1 * randn(size(t));  % Sinusoidal + random noise
+wind_response = lsim(Closed_Loop_PID, 1 + wind, t);
+
+%% === Factor 2: Sensor Failure (GPS Loss) ===
+gps_loss = ones(size(t));
+gps_loss(300:600) = 0;  % Simulate GPS loss for 3 seconds
+gps_response = lsim(Closed_Loop_PID, gps_loss, t);
+
+%% === Factor 3: Environmental Changes (Damping Variation) ===
+b_var = b * 1.5;  % Increased damping due to environmental changes
+den_env = [m b_var k];
+G_env = tf(num, den_env);
+Closed_Loop_Env = feedback(PID_Controller * G_env, 1);
+[env_response, t_env] = step(Closed_Loop_Env, t);
+
+%% === Nominal Response (for comparison) ===
+[nominal_response, t_nom] = step(Closed_Loop_PID, t);
+
+%% === Plotting All Scenarios ===
+figure;
+hold on;
+plot(t_nom, nominal_response, 'b-', 'LineWidth', 1.5, 'DisplayName', 'Nominal');
+plot(t, wind_response, 'r--', 'LineWidth', 1.5, 'DisplayName', 'Wind & Turbulence');
+plot(t, gps_response, 'g-.', 'LineWidth', 1.5, 'DisplayName', 'GPS Loss');
+plot(t_env, env_response, 'm:', 'LineWidth', 1.5, 'DisplayName', 'Environmental Change');
+title('System Response under External Factors');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+legend('show');
+grid on;
+hold off;
+
+%% === Analysis Table ===
+scenarios = {'Nominal', 'Wind & Turbulence', 'GPS Loss', 'Environmental Change'};
+rise_time = zeros(4, 1);
+settling_time = zeros(4, 1);
+overshoot = zeros(4, 1);
+
+% Nominal case
+info_nom = stepinfo(Closed_Loop_PID);
+rise_time(1) = info_nom.RiseTime;
+settling_time(1) = info_nom.SettlingTime;
+overshoot(1) = info_nom.Overshoot;
+
+% Wind & Turbulence case
+info_wind = stepinfo(wind_response, t);
+rise_time(2) = info_wind.RiseTime;
+settling_time(2) = info_wind.SettlingTime;
+overshoot(2) = info_wind.Overshoot;
+
+% GPS Loss case
+info_gps = stepinfo(gps_response, t);
+rise_time(3) = info_gps.RiseTime;
+settling_time(3) = info_gps.SettlingTime;
+overshoot(3) = info_gps.Overshoot;
+
+% Environmental Change case
+info_env = stepinfo(Closed_Loop_Env);
+rise_time(4) = info_env.RiseTime;
+settling_time(4) = info_env.SettlingTime;
+overshoot(4) = info_env.Overshoot;
+
+Performance_Table = table(scenarios', rise_time, settling_time, overshoot, ...
+    'VariableNames', {'Scenario', 'Rise Time (s)', 'Settling Time (s)', 'Overshoot (%)'});
+disp('=== Performance Analysis under External Factors ===');
+disp(Performance_Table);

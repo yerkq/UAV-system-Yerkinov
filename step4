@@ -1,0 +1,87 @@
+clc;
+clear;
+close all;
+
+%% === System Parameters ===
+m = 1.5;    % Mass of UAV [kg]
+g = 9.81;   % Gravitational acceleration [m/s^2]
+b = 0.5;    % Damping coefficient [N*s/m]
+k = 0.3;    % Aerodynamic force constant
+
+%% === Transfer Function Model ===
+num = [1];
+den = [m b k];
+G = tf(num, den);
+
+%% === Open-Loop Step Response ===
+figure;
+step(G);
+title('Open-Loop Step Response (No Controller)');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+grid on;
+
+%% === PID Controller (Auto-tuned via pidtune) ===
+PID_Controller = pidtune(G, 'PID');
+
+disp('Autotuned PID parameters:');
+disp(PID_Controller);
+
+Closed_Loop_PID = feedback(PID_Controller * G, 1);
+
+figure;
+step(Closed_Loop_PID);
+title('Closed-Loop Step Response with PID Controller (Autotuned)');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+grid on;
+
+%% === State Feedback Controller ===
+% State-space model
+A = [0 1; -k/m -b/m];
+B = [0; 1/m];
+C = [1 0];
+D = 0;
+
+% Desired closed-loop poles
+desired_poles = [-2.5 -3.0];
+K_sf = place(A, B, desired_poles);
+
+% Closed-loop system
+A_cl = A - B*K_sf;
+sys_cl_sf = ss(A_cl, B, C, D);
+
+figure;
+step(sys_cl_sf);
+title('Closed-Loop Step Response with State Feedback Controller');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+grid on;
+
+%% === Bode Plots ===
+figure;
+margin(G);
+title('Bode Diagram - Open Loop (No Controller)');
+
+figure;
+margin(PID_Controller * G);
+title('Bode Diagram - PID Controlled');
+
+% Convert state feedback to SISO using reference scaling
+Nbar = rscale(A, B, C, K_sf);  
+sys_siso_sf = ss(A - B*K_sf, B*Nbar, C, D);
+
+figure;
+margin(sys_siso_sf);
+title('Bode Diagram - State Feedback Controlled (SISO)');
+
+%% === Helper Function: Reference Scaling ===
+function Nbar = rscale(A,B,C,K)
+    % Calculates the scaling factor to preserve steady-state gain
+    s = size(A,1);
+    Z = [A, B; C, 0];
+    N = inv(Z) * [zeros(s,1); 1];
+    Nx = N(1:s);
+    Nu = N(s+1);
+    Nbar = Nu + K*Nx;
+end

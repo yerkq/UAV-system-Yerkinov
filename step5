@@ -1,0 +1,71 @@
+clc;
+clear;
+close all;
+
+%% === System Parameters ===
+m_nominal = 1.5;     % Nominal mass [kg]
+g = 9.81;            % Gravitational acceleration [m/s^2]
+b = 0.5;             % Damping coefficient [N*s/m]
+k = 0.3;             % Aerodynamic force constant
+
+mass_variations = [0.8, 1.0, 1.2]; % Mass multipliers: -20%, nominal, +20%
+
+%% === Controller (Using autotuned PID) ===
+num = [1];
+den_nominal = [m_nominal b k];
+G_nominal = tf(num, den_nominal);
+
+PID_Controller = pidtune(G_nominal, 'PID');
+Closed_Loop_Nominal = feedback(PID_Controller * G_nominal, 1);
+
+%% === Robustness Test: Step Responses with Mass Variations ===
+figure;
+hold on;
+colors = ['r', 'g', 'b']; % Colors for different masses
+
+for i = 1:length(mass_variations)
+    m_var = m_nominal * mass_variations(i);
+    den_var = [m_var b k];
+    G_var = tf(num, den_var);
+    Closed_Loop_Var = feedback(PID_Controller * G_var, 1);
+
+    [y, t] = step(Closed_Loop_Var, 5); % Simulate 5 seconds
+    plot(t, y, 'Color', colors(i), 'DisplayName', sprintf('Mass = %.1f kg', m_var));
+end
+
+title('Robustness Test: Step Responses under Mass Variations');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+legend('show');
+grid on;
+hold off;
+
+%% === Sensitivity Analysis: Mass Variation Impact on Overshoot and Rise Time ===
+overshoot_array = zeros(size(mass_variations));
+rise_time_array = zeros(size(mass_variations));
+
+for i = 1:length(mass_variations)
+    m_var = m_nominal * mass_variations(i);
+    den_var = [m_var b k];
+    G_var = tf(num, den_var);
+    Closed_Loop_Var = feedback(PID_Controller * G_var, 1);
+    
+    info = stepinfo(Closed_Loop_Var);
+    overshoot_array(i) = info.Overshoot;
+    rise_time_array(i) = info.RiseTime;
+end
+
+figure;
+subplot(2,1,1);
+plot(m_nominal * mass_variations, overshoot_array, '-o');
+title('Sensitivity: Mass vs. Overshoot');
+xlabel('Mass (kg)');
+ylabel('Overshoot (%)');
+grid on;
+
+subplot(2,1,2);
+plot(m_nominal * mass_variations, rise_time_array, '-o');
+title('Sensitivity: Mass vs. Rise Time');
+xlabel('Mass (kg)');
+ylabel('Rise Time (s)');
+grid on;

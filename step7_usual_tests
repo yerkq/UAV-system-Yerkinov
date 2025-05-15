@@ -1,0 +1,224 @@
+clc;
+clear;
+close all;
+
+%% === System Parameters ===
+m = 1.5;    % Nominal Mass [kg]
+g = 9.81;   % Gravitational acceleration [m/s^2]
+b = 0.5;    % Damping coefficient [N*s/m]
+k = 0.3;    % Aerodynamic force constant
+
+%% === Transfer Function Model ===
+num = 1;
+den = [m b k];
+G = tf(num, den);
+
+%% === PID Controller (Auto-Tuned) ===
+PID_Controller = pidtune(G, 'PID');
+Closed_Loop_PID = feedback(PID_Controller * G, 1);
+
+%% === State Feedback Controller ===
+A = [0 1; -k/m -b/m];
+B = [0; 1/m];
+C = [1 0];
+D = 0;
+
+desired_poles = [-2.5 -3.0];
+K_sf = place(A, B, desired_poles);
+A_cl = A - B*K_sf;
+sys_cl_sf = ss(A_cl, B, C, D);
+
+%% === Graph 1: Nominal Step Response ===
+figure;
+hold on;
+step(Closed_Loop_PID, 5);
+step(sys_cl_sf, 5);
+title('Step Response - Nominal System');
+legend('PID Control', 'State Feedback Control');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+grid on;
+hold off;
+
+%% === Graph 2: Step Response with Sensor Noise ===
+t = 0:0.01:5;
+signal = ones(size(t));
+high_noise = 0.1 * randn(size(t)); % High white noise
+low_freq_noise = 0.1 * sin(2 * pi * 1 * t); % Low frequency noise
+
+noisy_input = signal + high_noise + low_freq_noise;
+
+% Noisy response (PID)
+[y_noisy_PID, t_noisy] = lsim(Closed_Loop_PID, noisy_input, t);
+% Noisy response (State Feedback)
+[y_noisy_SF, ~] = lsim(sys_cl_sf, noisy_input, t);
+
+figure;
+plot(t_noisy, y_noisy_PID, 'b', 'LineWidth', 1.2);
+hold on;
+plot(t_noisy, y_noisy_SF, 'r--', 'LineWidth', 1.2);
+title('Step Response with Sensor Noise (PID vs. State Feedback)');
+legend('PID Control with Noise', 'State Feedback with Noise');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+grid on;
+hold off;
+
+%% === Graph 3: Step Response - Mass Variation ===
+m_variations = [1.2, 1.5, 1.8]; % Mass ±20%
+figure;
+hold on;
+for i = 1:length(m_variations)
+    m_var = m_variations(i);
+    den_var = [m_var b k];
+    G_var = tf(num, den_var);
+    Closed_Loop_Var = feedback(PID_Controller * G_var, 1);
+    step(Closed_Loop_Var, 5);
+end
+title('Step Response - Mass Variation (PID Control)');
+legend('Mass = 1.2 kg', 'Mass = 1.5 kg', 'Mass = 1.8 kg');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+grid on;
+hold off;
+
+%% === Graph 4: Sensitivity Analysis - Overshoot and Rise Time vs Mass ===
+overshoot_values = zeros(length(m_variations),1);
+rise_time_values = zeros(length(m_variations),1);
+
+for i = 1:length(m_variations)
+    m_var = m_variations(i);
+    den_var = [m_var b k];
+    G_var = tf(num, den_var);
+    Closed_Loop_Var = feedback(PID_Controller * G_var, 1);
+    info = stepinfo(Closed_Loop_Var);
+    overshoot_values(i) = info.Overshoot;
+    rise_time_values(i) = info.RiseTime;
+end
+
+figure;
+subplot(2,1,1);
+plot(m_variations, overshoot_values, '-o');
+title('Sensitivity: Mass vs. Overshoot');
+xlabel('Mass (kg)');
+ylabel('Overshoot (%)');
+grid on;
+
+subplot(2,1,2);
+plot(m_variations, rise_time_values, '-o');
+title('Sensitivity: Mass vs. Rise Time');
+xlabel('Mass (kg)');
+ylabel('Rise Time (s)');
+grid on;
+clc;
+clear;
+close all;
+
+%% === System Parameters ===
+m = 1.5;    % Nominal Mass [kg]
+g = 9.81;   % Gravitational acceleration [m/s^2]
+b = 0.5;    % Damping coefficient [N*s/m]
+k = 0.3;    % Aerodynamic force constant
+
+%% === Transfer Function Model ===
+num = 1;
+den = [m b k];
+G = tf(num, den);
+
+%% === PID Controller (Auto-Tuned) ===
+PID_Controller = pidtune(G, 'PID');
+Closed_Loop_PID = feedback(PID_Controller * G, 1);
+
+%% === State Feedback Controller ===
+A = [0 1; -k/m -b/m];
+B = [0; 1/m];
+C = [1 0];
+D = 0;
+
+desired_poles = [-2.5 -3.0];
+K_sf = place(A, B, desired_poles);
+A_cl = A - B*K_sf;
+sys_cl_sf = ss(A_cl, B, C, D);
+
+%% === Graph 1: Nominal Step Response ===
+figure;
+hold on;
+step(Closed_Loop_PID, 5);
+step(sys_cl_sf, 5);
+title('Step Response - Nominal System');
+legend('PID Control', 'State Feedback Control');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+grid on;
+hold off;
+
+%% === Graph 2: Step Response with Sensor Noise ===
+t = 0:0.01:5;
+signal = ones(size(t));
+high_noise = 0.1 * randn(size(t)); % High white noise
+low_freq_noise = 0.1 * sin(2 * pi * 1 * t); % Low frequency noise
+
+noisy_input = signal + high_noise + low_freq_noise;
+
+% Noisy response (PID)
+[y_noisy_PID, t_noisy] = lsim(Closed_Loop_PID, noisy_input, t);
+% Noisy response (State Feedback)
+[y_noisy_SF, ~] = lsim(sys_cl_sf, noisy_input, t);
+
+figure;
+plot(t_noisy, y_noisy_PID, 'b', 'LineWidth', 1.2);
+hold on;
+plot(t_noisy, y_noisy_SF, 'r--', 'LineWidth', 1.2);
+title('Step Response with Sensor Noise (PID vs. State Feedback)');
+legend('PID Control with Noise', 'State Feedback with Noise');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+grid on;
+hold off;
+
+%% === Graph 3: Step Response - Mass Variation ===
+m_variations = [1.2, 1.5, 1.8]; % Mass ±20%
+figure;
+hold on;
+for i = 1:length(m_variations)
+    m_var = m_variations(i);
+    den_var = [m_var b k];
+    G_var = tf(num, den_var);
+    Closed_Loop_Var = feedback(PID_Controller * G_var, 1);
+    step(Closed_Loop_Var, 5);
+end
+title('Step Response - Mass Variation (PID Control)');
+legend('Mass = 1.2 kg', 'Mass = 1.5 kg', 'Mass = 1.8 kg');
+xlabel('Time (s)');
+ylabel('Altitude (m)');
+grid on;
+hold off;
+
+%% === Graph 4: Sensitivity Analysis - Overshoot and Rise Time vs Mass ===
+overshoot_values = zeros(length(m_variations),1);
+rise_time_values = zeros(length(m_variations),1);
+
+for i = 1:length(m_variations)
+    m_var = m_variations(i);
+    den_var = [m_var b k];
+    G_var = tf(num, den_var);
+    Closed_Loop_Var = feedback(PID_Controller * G_var, 1);
+    info = stepinfo(Closed_Loop_Var);
+    overshoot_values(i) = info.Overshoot;
+    rise_time_values(i) = info.RiseTime;
+end
+
+figure;
+subplot(2,1,1);
+plot(m_variations, overshoot_values, '-o');
+title('Sensitivity: Mass vs. Overshoot');
+xlabel('Mass (kg)');
+ylabel('Overshoot (%)');
+grid on;
+
+subplot(2,1,2);
+plot(m_variations, rise_time_values, '-o');
+title('Sensitivity: Mass vs. Rise Time');
+xlabel('Mass (kg)');
+ylabel('Rise Time (s)');
+grid on;
